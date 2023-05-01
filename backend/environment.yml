@@ -1,0 +1,11 @@
+name: interventions
+channels:
+  - conda-forge
+dependencies:
+  - pydantic
+  - ipykernel
+  - pip
+  - pip:
+    - git+ssh://git@github.com/CSSLab/maia-lib.git
+    - starlite
+    - uvicorn
