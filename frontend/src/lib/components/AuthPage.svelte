@@ -1,7 +1,5 @@
 <script lang="ts">
 	import type { Auth } from '$lib/utils/auth';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import AuthButton from './AuthButton.svelte';
 
@@ -42,23 +40,8 @@
 	async function getPublicInfo() {
 		console.log('getting public info');
 		console.log(JSON.stringify({ username: auth.me?.username }));
-		// const res = await fetch(`/api/adduser`, {
-		// 	method: 'POST',
-		// 	body: JSON.stringify({ id: auth.me?.id, username: auth.me?.username, perfs: auth.me?.perfs }),
-		// 	headers: { 'content-type': 'application/json' }
-		// });
 		rating = auth.me?.perfs.blitz.rating;
 		console.log(rating);
-
-		// const accessContext = await auth.oauth.getAccessToken();
-		// console.log(accessContext);
-		// const headers = { Authorization: `Bearer ${accessContext.token?.value}` };
-		// console.log(headers);
-		// const res = await fetch('https://lichess.org/api/account', { headers });
-		// console.log(res);
-		// const json = await res.json();
-		// console.log(json);
-		// rating = json.perfs.blitz.rating;
 	}
 
 	$: if (auth && auth.me) {
@@ -70,20 +53,24 @@
 	}
 </script>
 
-<h2>Consent Page</h2>
-<h4>By clicking on the above button, you agree to the following terms and conditions.</h4>
-<ul>
-	<li>You are above the age of 18</li>
-	<li>Something else...</li>
-	<li>Something else...</li>
-</ul>
+<h2>Provide your Lichess username and rating</h2>
+
+<p>
+	To ensure that all study particpants are chess players, you will be asked to provide your Lichess
+	username and rating through the Lichess API. Using your rating, we will be able to target our AI
+	assistant to give reccomendations targeted to your skill level. This process is handled entirely
+	by Lichess, and we will not be able to view your password or any private information from your
+	account.
+</p>
+
+<p>Click on the button below to provide your Lichess username</p>
+
+<p>
+	If you have any concerns, feel free to reach out to Saumik Narayanan at
+	<a href="mailto:saumik@wustl.edu">saumik@wustl.edu</a>.
+</p>
+
+<AuthButton {auth} />
 
 <style>
-	code {
-		font-family: Consolas, 'courier new';
-		color: crimson;
-		background-color: #f1f1f1;
-		padding: 2px;
-		font-size: 105%;
-	}
 </style>

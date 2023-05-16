@@ -1,6 +1,5 @@
 import { json, type RequestEvent } from '@sveltejs/kit';
-import { readFileSync, writeFileSync } from 'fs';
-import { Chess } from 'chess.js';
+import { readFileSync } from 'fs';
 import type { Game } from '$lib/utils/types';
 import { root } from '$lib/utils/constants';
 

@@ -4,8 +4,14 @@
 	import { Auth } from '$lib/utils/auth';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import AuthButton from '$lib/components/AuthButton.svelte';
 	import AuthPage from '$lib/components/AuthPage.svelte';
+	import Consent from '$lib/components/Consent.svelte';
+	import Demo from '$lib/components/Demo.svelte';
+	import Survey from '$lib/components/Survey.svelte';
+
+	let consent = false;
+	let watchedDemo = true;
+	let finished = false;
 
 	let auth: Auth;
 	onMount(async () => {
@@ -23,6 +29,7 @@
 		if (URLSearchParams.has('state')) {
 			URLSearchParams.delete('state');
 		}
+		console.log(auth.me?.perfs);
 		goto(`?${$page.url.searchParams.toString()}`);
 	}
 </script>
@@ -33,31 +40,22 @@
 </svelte:head>
 
 <section>
-	<!-- <h1>
-    <span class="welcome">
-      <picture>
-        <source srcset={welcome} type="image/webp" />
-        <img src={welcome_fallback} alt="Welcome" />
-      </picture>
-    </span>
-
-    to your new<br />SvelteKit app
-  </h1> -->
-
-	<!-- <h2>
-    try editing <strong>src/routes/+page.svelte</strong>
-  </h2> -->
-
-	<!-- <Counter /> -->
-	<!-- <Interventions /> -->
-	<AuthButton {auth} />
-	<br /> <br />
 	{#if auth && auth.me}
-		<Interventions />
-	{:else}
+		{#if finished}
+			<Survey />
+		{:else if watchedDemo}
+			<Interventions bind:finished {auth} />
+		{:else}
+			<Demo bind:watchedDemo />
+		{/if}
+	{:else if consent}
 		<AuthPage {auth} />
+	{:else}
+		<Consent bind:consent />
 	{/if}
 </section>
+
+<!-- <Survey /> -->
 
 <style>
 	/* section {
@@ -87,4 +85,23 @@
     top: 0;
     display: block;
   } */
+
+	:global(body) {
+		margin: 5% auto;
+		background: #f2f2f2;
+		color: #444444;
+		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+		font-size: 16px;
+		line-height: 1.8;
+		text-shadow: 0 1px 0 #ffffff;
+		max-width: 70%;
+	}
+	:global(a) {
+		border-bottom: 1px solid #444444;
+		color: #444444;
+		text-decoration: none;
+	}
+	/* :global(a:hover) {
+		border-bottom: 0;
+	} */
 </style>

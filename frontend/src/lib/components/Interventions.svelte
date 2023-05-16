@@ -4,23 +4,29 @@
 	import { Chessground } from 'chessground';
 	import type { Api } from 'chessground/api';
 	import type { Key } from 'chessground/types';
-	import type { Game } from '$lib/utils/types';
+	import type { Game, MaiaPol, PolVal, Result } from '$lib/utils/types';
 
 	import '$lib/styles/chessground.base.css';
 	import '$lib/styles/chessground.brown.css';
 	import '$lib/styles/chessground.cburnett.css';
 	import { threshs } from '$lib/utils/constants';
+	import { maxKey } from '$lib/utils/utils';
+	import type { Auth } from '$lib/utils/auth';
+
+	export let finished;
+	export let auth: Auth;
 
 	let el: HTMLElement;
 	let cg: Api;
 	let chess: Chess;
-	let status = 'finished';
 
 	let userColor = 'w';
 	let thresh = 0.0;
 	let movesLeft = 0;
-
-	let message = 'asdf';
+	let exerciseCur = -1;
+	let exerciseTotal = 3;
+	let message = '';
+	let results: Result[] = [];
 
 	function dests() {
 		const dests = new Map<Key, Key[]>();
@@ -46,19 +52,22 @@
 		return game;
 	}
 
-	async function getPolicy(type: string) {
+	async function getPolicy(type: string): Promise<MaiaPol> {
 		const game = getGame();
 		const response = await fetch(`http://localhost:8801/get_${type}`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(game)
 		});
-		return await response.json();
+		let json = await response.json();
+		return [new Map(Object.entries(json[0])), json[1]];
 	}
 
 	async function newGame() {
+		exerciseCur = exerciseCur + 1;
+
 		thresh = threshs[Math.floor(Math.random() * threshs.length)];
-		movesLeft = Math.floor(Math.random() * 8) + 3;
+		movesLeft = Math.floor(Math.random() * 2) + 3;
 		const res = await fetch(`/api/getpuzzle`, { method: 'GET' });
 		const game: Game = await res.json();
 		chess = new Chess(game.start_fen);
@@ -79,6 +88,16 @@
 			lastMove: lastMove,
 			movable: { free: false }
 		});
+
+		results.push({
+			fen: chess.fen(),
+			threshold: thresh,
+			moves: [],
+			username: auth.me!.username,
+			perfs: auth.me?.perfs,
+			assistantRating: 1800,
+			opponentRating: 1800
+		});
 		playMove();
 	}
 
@@ -93,26 +112,46 @@
 		movesLeft--;
 	}
 
-	async function playMove() {
-		if (chess.isCheckmate()) {
-			message = 'Checkmate! The game is over, thanks for playing! Click the button to play again.';
-			return;
-		} else if (movesLeft == 0) {
-			message = 'Finished all the moves for this exercise. Click the button to play again.';
-			return;
-		}
-		if (chess.turn() == userColor) {
-			message = 'Waiting for hint generator';
-			const pol = (await getPolicy('pol'))[0];
-			const val = (await getPolicy('val'))[0];
-			const polMove = Object.keys(pol).reduce((a, b) => (pol[a] > pol[b] ? a : b));
-			const valMove = Object.keys(val).reduce((a, b) => (val[a] > val[b] ? a : b));
-			console.log(polMove, val[polMove], valMove, val[valMove]);
+	async function postResults() {
+		console.log(JSON.stringify(results.at(-1)));
+		const res = await fetch(`/api/addresult`, {
+			method: 'POST',
+			body: JSON.stringify(results.at(-1)),
+			headers: {
+				'content-type': 'application/json'
+			}
+		});
+		console.log(res);
+	}
 
-			if (val[valMove] - val[polMove] >= thresh) {
+	async function playMove() {
+		if (chess.isCheckmate() || movesLeft === 0) {
+			console.log(results);
+			postResults();
+			if (exerciseCur + 1 === exerciseTotal) {
+				message =
+					"You've finished all the exercises!  We are recording your results. This shouldn't take more than a few seconds. Please do not close this window during this time.";
+				message =
+					"You've finished all the exercises!  Click the button to continue with the experiment.";
+				console.log(results);
+			} else if (chess.isCheckmate()) {
+				message =
+					'Checkmate! The game is over, thanks for playing! Click the button to play again.';
+			} else {
+				message = 'Finished all the moves for this exercise. Click the button to play again.';
+			}
+		} else if (chess.turn() === userColor) {
+			message = 'Waiting for hint generator';
+			const [pol, val] = [(await getPolicy('pol'))[0], (await getPolicy('val'))[0]];
+			const [polMove, valMove] = [maxKey(pol), maxKey(val)];
+			// console.log(polMove, val.get(polMove), valMove, val.get(valMove));
+			const polvals: PolVal = [...pol.keys()].map((k, _) => [k, pol.get(k)!, val.get(k)!]);
+
+			const shouldIntervene = val.get(valMove)! - val.get(polMove)! >= thresh;
+			if (shouldIntervene) {
 				message = 'Please make your move. Hint is: ' + valMove;
 			} else {
-				message = 'Please make your move. No hints for this move';
+				message = 'Please make your move. No hints for this move.';
 			}
 
 			cg.set({
@@ -125,6 +164,14 @@
 					events: {
 						after: (orig, dest) => {
 							if (orig == 'a0' || dest == 'a0') return;
+							results[exerciseCur].moves.push({
+								fen: chess.fen(),
+								polvals: polvals,
+								polMove: polMove,
+								valMove: valMove,
+								playedMove: orig + dest,
+								intervened: shouldIntervene
+							});
 							updateMove(orig, dest);
 							playMove();
 						}
@@ -134,7 +181,7 @@
 		} else {
 			message = 'Waiting for opponent move';
 			const val = (await getPolicy('val'))[0];
-			const move = Object.keys(val).reduce((a, b) => (val[a] > val[b] ? a : b));
+			const move = maxKey(val);
 			const lastMove = [move.slice(0, 2), move.slice(2, 4)] as Key[];
 			chess.move(move);
 			cg.set({ fen: chess.fen(), lastMove: lastMove, movable: { free: false } });
@@ -144,28 +191,32 @@
 
 	onMount(async () => {
 		cg = Chessground(el, {});
-		status = 'ready';
-	});
-
-	$: if (status == 'ready') {
 		newGame();
-		status = 'starting';
-	}
+	});
 </script>
 
-<p>You are playing as: {userColor == 'w' ? 'White' : 'Black'}</p>
-<p>Your threshold is {thresh}</p>
+<!-- <p>You are playing as: {userColor == 'w' ? 'White' : 'Black'}</p> -->
+
+<h3>You are on Exercise {exerciseCur + 1} of {exerciseTotal}</h3>
+
+<div class="board" bind:this={el} />
+
 {#if movesLeft > 2}
 	<p>You have {movesLeft} moves left to play.</p>
 {:else if movesLeft == 1}
 	<p>You have {movesLeft} move left to play.</p>
-{:else}
-	<p>Finished all your moves!</p>
 {/if}
 <!-- <p>You have {movesLeft} {movesLeft == 1 ? 'move' : 'moves'} left to play.</p> -->
-<div class="board" bind:this={el} />
 
 <p>{message}</p>
+
+{#if movesLeft == 0 || (chess && chess.isCheckmate())}
+	{#if exerciseCur + 1 === exerciseTotal}
+		<button on:click={() => (finished = true)}> Continue with Experiment </button>
+	{:else}
+		<button on:click={newGame}> Next Exercise </button>
+	{/if}
+{/if}
 
 <style>
 	.board {
